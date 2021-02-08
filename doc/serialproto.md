@@ -35,11 +35,11 @@ All commands and responses are sent via RS485. The device is usually in listenin
 
 Request:
 
-| Offset | Length | Content            |
-| ------ | ------ | ------------------ |
-| 0      | 1      | Address byte       |
-| 1      | 1      | Length (1)         |
-| 2      | 1      | Command ```0x00``` |
+| Offset | Length | Content                                         |
+| ------ | ------ | ----------------------------------------------- |
+| 0      | 1      | Address byte                                    |
+| 1      | 1      | Length (1)                                      |
+| 2      | 1      | Command ```0x00```                              |
 
 Response:
 
@@ -54,11 +54,11 @@ Response:
 
 Request:
 
-| Offset | Length | Content            |
-| ------ | ------ | ------------------ |
-| 0      | 1      | Address byte       |
-| 1      | 1      | Length (1)         |
-| 2      | 1      | Command ```0x01``` |
+| Offset | Length | Content                                         |
+| ------ | ------ | ----------------------------------------------- |
+| 0      | 1      | Address byte                                    |
+| 1      | 1      | Length (1)                                      |
+| 2      | 1      | Command ```0x01```                              |
 
 Response:
 
@@ -112,13 +112,13 @@ Response:
 
 Request:
 
-| Offset | Length | Content                        |
-| ------ | ------ | ------------------------------ |
-| 0      | 1      | Address byte                   |
-| 1      | 1      | Length (9)                     |
-| 2      | 1      | Command ```0x04```             |
-| 3      | 4      | Target position X (signed int) |
-| 7      | 4      | Target position Y (signed int) |
+| Offset | Length | Content                                         |
+| ------ | ------ | ----------------------------------------------- |
+| 0      | 1      | Address byte                                    |
+| 1      | 1      | Length (9)                                      |
+| 2      | 1      | Command ```0x04```                              |
+| 3      | 4      | Target position X (signed int)                  |
+| 7      | 4      | Target position Y (signed int)                  |
 
 Response:
 
@@ -136,12 +136,12 @@ Request:
 
 Response:
 
-| Offset | Length | Content                        |
-| ------ | ------ | ------------------------------ |
-| 0      | 1      | Address byte (0, response)     |
-| 1      | 1      | Length (8)                     |
-| 3      | 4      | Delay count X (unsigned int)   |
-| 7      | 4      | Delay count Y (unsigned int)   |
+| Offset | Length | Content                                         |
+| ------ | ------ | ----------------------------------------------- |
+| 0      | 1      | Address byte (0, response)                      |
+| 1      | 1      | Length (8)                                      |
+| 3      | 4      | Delay count X (unsigned int)                    |
+| 7      | 4      | Delay count Y (unsigned int)                    |
 
 ### Set speed
 
@@ -179,13 +179,13 @@ Response:
 
 The status flags consist of the following bits:
 
-| Bit  | Meaning           |
-| ---- | ----------------- |
-| 0    | Motor X is moving |
-| 1    | Motor Y is moving |
-| 2    |                   |
-| 3    |                   |
-| 4    |                   |
-| 5    |                   |
-| 6    |                   |
-| 7    |                   |
+| Bit  | Meaning                                                    |
+| ---- | ---------------------------------------------------------- |
+| 0    | Motor X is moving                                          |
+| 1    | Motor Y is moving                                          |
+| 2    |                                                            |
+| 3    |                                                            |
+| 4    |                                                            |
+| 5    |                                                            |
+| 6    |                                                            |
+| 7    |                                                            |
