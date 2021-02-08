@@ -6,4 +6,8 @@ RS485 is realized with an external MAX485 level shifter.
 
 ## Protocol
 
-The protocol is documented in [doc/serialproto.md](/blob/master/doc/serialproto.md).
+The protocol is documented in ```doc/serialproto.md```
+
+## License
+
+The license can be found in ```LICENSE.md```. It's a simple BSD style license.
