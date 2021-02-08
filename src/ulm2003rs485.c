@@ -8,6 +8,12 @@
         #define M_PI 3.14159265358979323846264338327950288
 #endif
 
+#ifndef __cplusplus
+    typedef unsigned char bool;
+    #define true 1
+    #define false 0
+#endif
+
 /*
     Pin mapping used on arduino pro mini board:
 
@@ -81,7 +87,14 @@
                 /1024                   15.625 kHz              1                       7.812 kHz
 */
 
+#define STEPPER_TIMERTICK_FRQ                   7812/2
+#define STEPPER_TIMERTICK_PRESCALER             0x06
+#define STEPPER_TIMERTICK_OVERFLOWVAL           0x01
+#define STEPPER_WAKEUP_SLEEP_TICKS              10                      /* More than 1.2 ms! */
+
+
 void delay(unsigned long millisecs);
+static void handleStepperEvents();
 
 static void setStepPin(
     unsigned char idxStepper,
@@ -138,6 +151,18 @@ static unsigned char stepTable[8*4] = {
 	1, 0, 0, 1
 };
 
+static void setStepDisable(
+    unsigned char idxStepper
+) {
+    unsigned long int pin;
+
+    if(idxStepper > 1) { return; }
+
+    for(pin = 0; pin < 4; pin=pin+1) {
+        setStepPin(idxStepper, pin, 0);
+    }
+}
+
 static void setStepState(
     unsigned char idxStepper,
     unsigned char stepIndex
@@ -157,9 +182,24 @@ static void setStepState(
 /*
     Stepper current state
 */
-static unsigned char currentState[2];
 
-static signed int currentPosition[2];
+#define DEFAULT_BOUNDS_X_MIN        1073741824
+#define DEFAULT_BOUNDS_X_MAX        1073741824
+#define DEFAULT_BOUNDS_Y_MIN        1073741824
+#define DEFAULT_BOUNDS_Y_MAX        1073741824
+
+#define DEFAULT_VELOCITY_X          80
+#define DEFAULT_VELOCITY_Y          80
+
+static unsigned char currentState[2];
+static   signed long int currentPosition[2];
+static   signed long int targetPosition[2];
+
+static unsigned long int currentMin[2];
+static unsigned long int currentMax[2];
+static unsigned long int currentVelocity[2];
+
+static unsigned long int currentVelocityCounter[2];
 
 int main() {
 	#ifndef FRAMAC_SKIP
@@ -179,7 +219,9 @@ int main() {
     DDRD = DDRD | 0xC0;
     PORTD = 0x00;
 
-	sei();
+    #ifndef FRAMAC_SKIP
+		sei();
+	#endif
 
     /*
         Reset stepper states
@@ -189,9 +231,39 @@ int main() {
 
     currentPosition[0]      = 0;
     currentPosition[1]      = 0;
+    targetPosition[0]       = 0;
+    targetPosition[1]       = 0;
+
+    currentMin[0] = DEFAULT_BOUNDS_X_MIN;
+    currentMin[1] = DEFAULT_BOUNDS_Y_MIN;
+
+    currentMax[0] = DEFAULT_BOUNDS_X_MAX;
+    currentMax[1] = DEFAULT_BOUNDS_Y_MAX;
+
+    currentVelocity[0] = DEFAULT_VELOCITY_X;
+    currentVelocity[1] = DEFAULT_VELOCITY_Y;
+
+    /*
+        Setup stepper timer
+    */
+    #ifndef FRAMAC_SKIP
+        cli();
+    #endif
+
+    TCCR2B = 0;
+
+    TCNT2 = 0;                              /* Current timer counter register 0 */
+    TCCR2A = 0x02;                          /* CTC mode - count up to OCR2A, disable OCR output pins */
+    OCR2A = 0x01;                           /* Counting up to one - triggers every pulse ... */
+    TIMSK2 = 0x02;                          /* OCIE2A flag to enable interrupts on output compare */
+    TCCR2B = STEPPER_TIMERTICK_PRESCALER;   /* Set prescaler, non FOCA, enable timer */
+
+    #ifndef FRAMAC_SKIP
+		sei();
+	#endif
 
 	for(;;) {
-        delay(10);
+        handleStepperEvents();
 	}
 }
 
@@ -287,4 +359,57 @@ void delay(unsigned long millisecs) {
                 }
         }
         return;
+}
+
+/*
+==========================
+= Stepper timer routines =
+==========================+
+
+Note that the actual work is not done inside an ISR. This is done that
+way since it's better to miss a step than to stay inside an infinite loop
+due to nesting of communication processing and timer interrupts
+*/
+
+volatile bool bIntTriggered = false;
+
+ISR(TIMER2_COMPA_vect) {
+    TCCR2B = TCCR2B; /* Dummy write */
+    bIntTriggered = true;
+}
+
+static void handleStepperEvents() {
+    int iStepper;
+
+    /* Called from non interrupt context */
+    if(bIntTriggered != true) { return; }
+    bIntTriggered = false;
+
+    /*
+        - Count next step counters. If they reach the target value then
+            - Check if the stepper is at it's target position. If not move
+              one step into the direction.
+    */
+    for(iStepper = 0; iStepper < 2; iStepper = iStepper + 1){
+        currentVelocityCounter[iStepper] = currentVelocityCounter[iStepper] + 1;
+        if(currentVelocityCounter[iStepper] == currentVelocity[iStepper]) {
+            currentVelocityCounter[iStepper] = 0;
+
+            if(currentPosition[iStepper] > targetPosition[iStepper]) {
+                if(currentState[iStepper] == 0) {
+                    currentState[iStepper] = 7;
+                } else {
+                    currentState[iStepper] = currentState[iStepper] - 1;
+                }
+                currentPosition[iStepper] = currentPosition[iStepper] - 1;
+                setStepState(iStepper, currentState[iStepper]);
+            } else if(currentPosition[iStepper] < targetPosition[iStepper]){
+                currentState[iStepper] = (currentState[iStepper] + 1) % 7;
+                currentPosition[iStepper] = currentPosition[iStepper] + 1;
+                setStepState(iStepper, currentState[iStepper]);
+            } else {
+                setStepDisable(iStepper);
+            }
+        }
+    }
 }
