@@ -513,7 +513,7 @@ static uint16_t ringBuffer_ReadINT16(
 
     return ((uint16_t)(tmp[0])) | (((uint16_t)(tmp[1])) << 8);
 }
-static uint16_t ringBuffer_ReadINT32(
+static uint32_t ringBuffer_ReadINT32(
     struct ringBuffer* lpBuf
 ) {
     unsigned char tmp[4];
@@ -698,7 +698,7 @@ static void serialHandleData() {
         bCommandByte = ringBuffer_ReadChar(&rbTX);
 
         switch(bCommandByte) {
-            case 0x00:
+            case 0x00: /* Identify */
                 /*
                     This is a self contained command (already fully read) that basically
                     only requests an identification string
@@ -708,6 +708,40 @@ static void serialHandleData() {
                 ringBuffer_WriteChars(&rbTX, serialHandleData__RESPONSE_IDENTIFY, sizeof(serialHandleData__RESPONSE_IDENTIFY));
                 serialModeTX();
                 break;
+
+            case 0x04: /* Set position */
+                /*
+                    Set position requires 11 bytes, now only two signed integers are added; Note
+                    that they are usually transmitted unsigned with a direction flag in the
+                    uppermost position ...
+                */
+                {
+                    uint32_t newPos[2];
+
+                    newPos[0] = ringBuffer_ReadINT32(&rbRX);
+                    newPos[1] = ringBuffer_ReadINT32(&rbRX);
+
+                    if((newPos[0] & 0x80000000) == 0) {
+                        if((newPos[0] & 0x7FFFFFFF) < currentMax[0]) {
+                            targetPosition[0] = newPos[0] & 0x7FFFFFFF;
+                        }
+                    } else {
+                        if((newPos[0] & 0x7FFFFFFF) < currentMin[0]) {
+                            targetPosition[0] = -1 * (newPos[0] & 0x7FFFFFFF);
+                        }
+                    }
+
+                    if((newPos[1] & 0x80000000) == 0) {
+                        if((newPos[1] & 0x7FFFFFFF) < currentMax[1]) {
+                            targetPosition[1] = newPos[1] & 0x7FFFFFFF;
+                        }
+                    } else {
+                        if((newPos[1] & 0x7FFFFFFF) < currentMin[1]) {
+                            targetPosition[1] = -1 * (newPos[1] & 0x7FFFFFFF);
+                        }
+                    }
+                }
+
             default:
                 /* Unknown command */
                 rbRX.dwHead = (rbRX.dwHead + (bLenByte-3)) % SERIAL_RINGBUFFER_SIZE;
