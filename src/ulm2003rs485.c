@@ -31,6 +31,9 @@
         2           11              B           3
         1           10              B           2
 
+    I/O mode select (RX/TX):
+        Pin         Bank            Bit
+        3           D               3
 
     I/O bank configuration:
         PA:             0           IN      Nopull
@@ -65,7 +68,7 @@
 
         PD:             0           -                   Serial TXD
                         1           -                   Serial RXD
-                        2           IN      Nopull
+                        2           OUT
                         3           IN      Nopull
                         4           IN      Nopull
                         5           IN      Nopull
@@ -95,6 +98,8 @@
 
 void delay(unsigned long millisecs);
 static void handleStepperEvents();
+static void serialInit();
+static void serialHandleData();
 
 static void setStepPin(
     unsigned char idxStepper,
@@ -207,16 +212,16 @@ int main() {
 	#endif
 
 	/* Setup system clock */
-        TCCR0A = 0x00;
-        TCCR0B = 0x03;          /* /64 prescaler */
-        TIMSK0 = 0x01;          /* Enable overflow interrupt */
+    TCCR0A = 0x00;
+    TCCR0B = 0x03;          /* /64 prescaler */
+    TIMSK0 = 0x01;          /* Enable overflow interrupt */
 
 	/*
         Setup GPIO
     */
     DDRB = 0x3F;
     PORTB = 0x00;
-    DDRD = DDRD | 0xC0;
+    DDRD = DDRD | 0xC4;
     PORTD = 0x00;
 
     #ifndef FRAMAC_SKIP
@@ -243,6 +248,14 @@ int main() {
     currentVelocity[0] = DEFAULT_VELOCITY_X;
     currentVelocity[1] = DEFAULT_VELOCITY_Y;
 
+    currentVelocityCounter[0] = 0;
+    currentVelocityCounter[1] = 0;
+
+    /*
+        Setup serial port (RS485 half duplex mode)
+    */
+    serialInit();
+
     /*
         Setup stepper timer
     */
@@ -264,6 +277,7 @@ int main() {
 
 	for(;;) {
         handleStepperEvents();
+        serialHandleData(); /* In case we received data, handle that data ... */
 	}
 }
 
@@ -412,4 +426,178 @@ static void handleStepperEvents() {
             }
         }
     }
+}
+
+/*
+    ============================================
+    Serial protocol handler (RS485, half duplex)
+    ============================================
+*/
+
+#ifndef SERIAL_RINGBUFFER_SIZE
+    #define SERIAL_RINGBUFFER_SIZE 256
+#endif
+
+struct ringBuffer {
+    unsigned long int dwHead;
+    unsigned long int dwTail;
+
+    unsigned char buffer[SERIAL_RINGBUFFER_SIZE];
+};
+
+static inline void ringBuffer_Init(struct ringBuffer* lpBuf) {
+    lpBuf->dwHead = 0;
+    lpBuf->dwTail = 0;
+}
+static inline bool ringBuffer_Available(struct ringBuffer* lpBuf) {
+    return (lpBuf->dwHead != lpBuf->dwTail) ? true : false;
+}
+static inline bool ringBuffer_Writable(struct ringBuffer* lpBuf) {
+    return (((lpBuf->dwHead + 1) % SERIAL_RINGBUFFER_SIZE) != lpBuf->dwTail) ? true : false;
+}
+static inline unsigned long int ringBuffer_AvailableN(struct ringBuffer* lpBuf) {
+    if(lpBuf->dwHead > lpBuf->dwTail) {
+        return lpBuf->dwHead - lpBuf->dwTail;
+    } else {
+        return (SERIAL_RINGBUFFER_SIZE - lpBuf->dwTail) + lpBuf->dwHead;
+    }
+}
+static inline unsigned long int ringBuffer_WriteableN(struct ringBuffer* lpBuf) {
+    return SERIAL_RINGBUFFER_SIZE - ringBuffer_AvailableN(lpBuf);
+}
+
+static unsigned char ringBuffer_ReadChar(struct ringBuffer* lpBuf) {
+    char t;
+
+    if(lpBuf->dwHead == lpBuf->dwTail) {
+        return 0x00;
+    }
+
+    t = lpBuf->buffer[lpBuf->dwTail];
+    lpBuf->dwTail = (lpBuf->dwTail + 1) % SERIAL_RINGBUFFER_SIZE;
+
+    return t;
+}
+static void ringBuffer_WriteChar(
+    struct ringBuffer* lpBuf,
+    unsigned char bData
+) {
+    if(((lpBuf->dwHead + 1) % SERIAL_RINGBUFFER_SIZE) == lpBuf->dwTail) {
+        return; /* Simply discard data */
+    }
+
+    lpBuf->buffer[lpBuf->dwHead] = bData;
+    lpBuf->dwHead = (lpBuf->dwHead + 1) % SERIAL_RINGBUFFER_SIZE;
+}
+
+static struct ringBuffer rbRX;
+static struct ringBuffer rbTX;
+
+static inline void serialModeRX() {
+    /*
+        Set to receive mode on RS485 driver
+        Toggle receive enable bit on UART, disable transmit enable bit
+    */
+    PORTD = PORTD & (~(0x08)); /* Set RE and DE to low (RE: active, DE: inactive) */
+    UCSR0B = (UCSR0B & (~0xE8)) | 0x10 | 0x80; /* Disable all transmit interrupts, enable receiver, enable receive complete interrupt */
+    return;
+}
+
+static inline void serialModeTX() {
+    /*
+        Set to transmit mode on RS485 driver
+        and toggle transmit enable bit in UART
+    */
+    PORTD = PORTD | 0x08; /* Set RE and DE to high (RE: inactive, DE: active) */
+    UCSR0B = (UCSR0B & (~0x90)) | 0x08 | 0x20; /* Enable UDRE interrupt handler, enable transmitter and disable receive interrupt & receiver */
+    return;
+}
+
+ISR(USART_RX_vect) {
+    #ifndef FRAMAC_SKIP
+        cli();
+    #endif
+    ringBuffer_WriteChar(&rbRX, UDR0);
+    #ifndef FRAMAC_SKIP
+        sei();
+    #endif
+}
+
+ISR(USART_UDRE_vect) {
+    /*
+        Transmit as long as data is available to transmit. If there
+        is no more data we simply stop to transmit and enter receive mode
+        again
+    */
+    #ifndef FRAMAC_SKIP
+        cli();
+    #endif
+    if(ringBuffer_AvailableN(&rbTX) != true) {
+        /* Disable transmit mode again ... */
+        serialModeRX();
+    } else {
+        /* Shift next byte to the outside world ... */
+        UDR0 = ringBuffer_ReadChar(&rbTX);
+    }
+    #ifndef FRAMAC_SKIP
+        sei();
+    #endif
+}
+
+static void serialInit() {
+    #ifndef FRAMAC_SKIP
+		cli();
+	#endif
+
+    /*
+        Initialize structures
+    */
+    ringBuffer_Init(&rbRX);
+    ringBuffer_Init(&rbTX);
+
+    /*
+        Initialize UART
+    */
+    UBRR0   = 34;
+    UCSR0A  = 0x02;
+    UCSR0B  = 0x00;
+    UCSR0C  = 0x06;
+
+    /*
+        Enable serial receiver on RS485 interface
+    */
+    serialModeRX();
+
+    #ifndef FRAMAC_SKIP
+		sei();
+	#endif
+}
+
+static void serialHandleData() {
+    unsigned char bLenByte;
+
+    /* In case not even a header is present ... ignore */
+    if(ringBuffer_AvailableN(&rbRX) < 2) {
+        return;
+    }
+
+    /* In case there is a header check if there is enough data ... */
+    bLenByte = rbRX.buffer[(rbRX.dwHead + 1) % SERIAL_RINGBUFFER_SIZE];
+
+    if(ringBuffer_AvailableN(&rbRX) < bLenByte) {
+        return;
+    }
+
+    /*
+        We have really received a complete message, handle that message ...
+    */
+
+
+
+
+
+    /*
+        Discard message ...
+    */
+    rbRX.dwHead = (rbRX.dwHead + bLenByte) % SERIAL_RINGBUFFER_SIZE;
 }
