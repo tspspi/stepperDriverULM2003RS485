@@ -670,6 +670,16 @@ static char serialHandleData__RESPONSE_IDENTIFY[20] = {
     0x01, 0x00 /* Version */
 };
 
+static signed long int serialHandleData__DECODE_UINT32_TO_SINT(
+    uint32_t dwData
+) {
+    if((dwData & 0x80000000) == 0) {
+        return (signed long int)(dwData & 0x7FFFFFFF);
+    } else {
+        return ((signed long int)(dwData & 0x7FFFFFFF)) * (-1);
+    }
+}
+
 static void serialHandleData() {
     unsigned char bLenByte;
     unsigned char bAdrByte;
@@ -741,7 +751,33 @@ static void serialHandleData() {
                         }
                     }
                 }
+                rbRX.dwHead = (rbRX.dwHead + (bLenByte-3-8)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
+                break;
+            case 0x02: /* Set boundaries */
+                {
+                    uint32_t newBounds[4];
 
+                    newBounds[0] = ringBuffer_ReadINT32(&rbRX);
+                    newBounds[1] = ringBuffer_ReadINT32(&rbRX);
+                    newBounds[2] = ringBuffer_ReadINT32(&rbRX);
+                    newBounds[3] = ringBuffer_ReadINT32(&rbRX);
+
+                    currentMax[0] = serialHandleData__DECODE_UINT32_TO_SINT(newBounds[0]);
+                    currentMin[0] = serialHandleData__DECODE_UINT32_TO_SINT(newBounds[1]);
+                    currentMax[1] = serialHandleData__DECODE_UINT32_TO_SINT(newBounds[2]);
+                    currentMin[1] = serialHandleData__DECODE_UINT32_TO_SINT(newBounds[3]);
+                }
+                rbRX.dwHead = (rbRX.dwHead + (bLenByte-3-16)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
+                break;
+            case 0x06: /* Set speed */
+                {
+                    uint32_t newSpeedDelay[2];
+
+                    currentVelocity[0] = ringBuffer_ReadINT32(&rbRX);
+                    currentVelocity[1] = ringBuffer_ReadINT32(&rbRX);
+                }
+                rbRX.dwHead = (rbRX.dwHead + (bLenByte-3-8)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
+                break;
             default:
                 /* Unknown command */
                 rbRX.dwHead = (rbRX.dwHead + (bLenByte-3)) % SERIAL_RINGBUFFER_SIZE;
