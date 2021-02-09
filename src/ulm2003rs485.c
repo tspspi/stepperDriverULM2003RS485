@@ -442,10 +442,10 @@ static void handleStepperEvents() {
 #endif
 
 struct ringBuffer {
-    unsigned long int dwHead;
-    unsigned long int dwTail;
+    volatile unsigned long int dwHead;
+    volatile unsigned long int dwTail;
 
-    unsigned char buffer[SERIAL_RINGBUFFER_SIZE];
+    volatile unsigned char buffer[SERIAL_RINGBUFFER_SIZE];
 };
 
 static inline void ringBuffer_Init(struct ringBuffer* lpBuf) {
@@ -459,7 +459,7 @@ static inline bool ringBuffer_Writable(struct ringBuffer* lpBuf) {
     return (((lpBuf->dwHead + 1) % SERIAL_RINGBUFFER_SIZE) != lpBuf->dwTail) ? true : false;
 }
 static inline unsigned long int ringBuffer_AvailableN(struct ringBuffer* lpBuf) {
-    if(lpBuf->dwHead > lpBuf->dwTail) {
+    if(lpBuf->dwHead >= lpBuf->dwTail) {
         return lpBuf->dwHead - lpBuf->dwTail;
     } else {
         return (SERIAL_RINGBUFFER_SIZE - lpBuf->dwTail) + lpBuf->dwHead;
@@ -573,8 +573,8 @@ static void ringBuffer_WriteINT32(
 
 
 
-static struct ringBuffer rbRX;
-static struct ringBuffer rbTX;
+static volatile struct ringBuffer rbRX;
+static volatile struct ringBuffer rbTX;
 
 static unsigned char bOwnAddressRS485;
 
@@ -617,13 +617,15 @@ ISR(USART_UDRE_vect) {
     #ifndef FRAMAC_SKIP
         cli();
     #endif
-    if(ringBuffer_AvailableN(&rbTX) != true) {
+
+    if(ringBuffer_Available(&rbTX) != true) {
         /* Disable transmit mode again ... */
         serialModeRX();
     } else {
         /* Shift next byte to the outside world ... */
         UDR0 = ringBuffer_ReadChar(&rbTX);
     }
+
     #ifndef FRAMAC_SKIP
         sei();
     #endif
@@ -691,7 +693,7 @@ static void serialHandleData() {
     }
 
     /* In case there is a header check if there is enough data ... */
-    bLenByte = rbRX.buffer[(rbRX.dwHead + 1) % SERIAL_RINGBUFFER_SIZE];
+    bLenByte = rbRX.buffer[(rbRX.dwTail + 1) % SERIAL_RINGBUFFER_SIZE];
 
     if(ringBuffer_AvailableN(&rbRX) < bLenByte) {
         return;
@@ -702,19 +704,17 @@ static void serialHandleData() {
         the destination address matches ...
     */
 
-    bAdrByte = ringBuffer_ReadChar(&rbTX);
+    bAdrByte = ringBuffer_ReadChar(&rbRX);
     if(bAdrByte == bOwnAddressRS485) {
-        ringBuffer_ReadChar(&rbTX);
-        bCommandByte = ringBuffer_ReadChar(&rbTX);
-
+        ringBuffer_ReadChar(&rbRX);
+        bCommandByte = ringBuffer_ReadChar(&rbRX);
         switch(bCommandByte) {
             case 0x00: /* Identify */
                 /*
                     This is a self contained command (already fully read) that basically
                     only requests an identification string
                 */
-                rbRX.dwHead = (rbRX.dwHead + (bLenByte-3)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
-
+                rbRX.dwTail = (rbRX.dwTail + (bLenByte-3)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
                 ringBuffer_WriteChars(&rbTX, serialHandleData__RESPONSE_IDENTIFY, sizeof(serialHandleData__RESPONSE_IDENTIFY));
                 serialModeTX();
                 break;
@@ -751,7 +751,7 @@ static void serialHandleData() {
                         }
                     }
                 }
-                rbRX.dwHead = (rbRX.dwHead + (bLenByte-3-8)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
+                rbRX.dwTail = (rbRX.dwTail + (bLenByte-3-8)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
                 break;
             case 0x02: /* Set boundaries */
                 {
@@ -767,7 +767,7 @@ static void serialHandleData() {
                     currentMax[1] = serialHandleData__DECODE_UINT32_TO_SINT(newBounds[2]);
                     currentMin[1] = serialHandleData__DECODE_UINT32_TO_SINT(newBounds[3]);
                 }
-                rbRX.dwHead = (rbRX.dwHead + (bLenByte-3-16)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
+                rbRX.dwTail = (rbRX.dwTail + (bLenByte-3-16)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
                 break;
             case 0x06: /* Set speed */
                 {
@@ -776,17 +776,17 @@ static void serialHandleData() {
                     currentVelocity[0] = ringBuffer_ReadINT32(&rbRX);
                     currentVelocity[1] = ringBuffer_ReadINT32(&rbRX);
                 }
-                rbRX.dwHead = (rbRX.dwHead + (bLenByte-3-8)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
+                rbRX.dwTail = (rbRX.dwTail + (bLenByte-3-8)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
                 break;
             default:
                 /* Unknown command */
-                rbRX.dwHead = (rbRX.dwHead + (bLenByte-3)) % SERIAL_RINGBUFFER_SIZE;
+                rbRX.dwTail = (rbRX.dwTail + (bLenByte-3)) % SERIAL_RINGBUFFER_SIZE;
                 break;
         }
     } else {
         /*
             Discard message ...
         */
-        rbRX.dwHead = (rbRX.dwHead + (bLenByte-1)) % SERIAL_RINGBUFFER_SIZE;
+        rbRX.dwTail = (rbRX.dwTail + (bLenByte-1)) % SERIAL_RINGBUFFER_SIZE;
     }
 }
