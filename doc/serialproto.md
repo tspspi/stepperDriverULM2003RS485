@@ -24,7 +24,7 @@ All commands and responses are sent via RS485. The device is usually in listenin
 | 0x01 | Get boundaries |                | Returns the minimum and maximum position for each channel                                       |
 | 0x02 | Set boundaries | 4 boundaries   | Sets the boundaries for both channels                                                           |
 | 0x03 | Get position   |                | Gets the current position                                                                       |
-| 0x04 | Set position   | 2 positions    | Sets the position target for both motors. They start moving on the next tick towards the target |
+| 0x04 | Set position   | 2 positions    | Sets the position TARGET for both motors. They start moving on the next tick towards the target |
 | 0x05 | Get speed      |                | Returns a "speed" setting - this sets the delay between steps in timer ticks                    |
 | 0x06 | Set speed      | 2 delay values | Sets a "speed" setting - this sets the delay between steps in timer ticks                       |
 | 0x07 | Get status     |                | Returns status flags. Currently only defined if the motor is moving or not                      |
