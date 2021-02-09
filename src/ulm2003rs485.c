@@ -5,7 +5,10 @@
 #include <stdint.h>
 
 #ifndef M_PI
-        #define M_PI 3.14159265358979323846264338327950288
+    #define M_PI 3.14159265358979323846264338327950288
+#endif
+#ifndef RS485ADR
+    #define RS485ADR 0x02
 #endif
 
 #ifndef __cplusplus
@@ -478,6 +481,57 @@ static unsigned char ringBuffer_ReadChar(struct ringBuffer* lpBuf) {
 
     return t;
 }
+static unsigned long int ringBuffer_ReadChars(
+    struct ringBuffer* lpBuf,
+    unsigned char* lpOut,
+    unsigned long int dwLen
+) {
+    char t;
+    unsigned long int i;
+
+    for(i = 0; i < dwLen; i=i+1) {
+        if(lpBuf->dwHead == lpBuf->dwTail) {
+            return 0x00;
+        }
+
+        t = lpBuf->buffer[lpBuf->dwTail];
+        lpBuf->dwTail = (lpBuf->dwTail + 1) % SERIAL_RINGBUFFER_SIZE;
+        lpOut[i] = t;
+    }
+
+    return i;
+}
+static uint16_t ringBuffer_ReadINT16(
+    struct ringBuffer* lpBuf
+) {
+    unsigned char tmp[2];
+
+    if(ringBuffer_Available(lpBuf) < 2) { return 0; }
+
+    tmp[0] = ringBuffer_ReadChar(lpBuf);
+    tmp[1] = ringBuffer_ReadChar(lpBuf);
+
+    return ((uint16_t)(tmp[0])) | (((uint16_t)(tmp[1])) << 8);
+}
+static uint16_t ringBuffer_ReadINT32(
+    struct ringBuffer* lpBuf
+) {
+    unsigned char tmp[4];
+
+    if(ringBuffer_Available(lpBuf) < 4) { return 0; }
+
+    tmp[0] = ringBuffer_ReadChar(lpBuf);
+    tmp[1] = ringBuffer_ReadChar(lpBuf);
+    tmp[2] = ringBuffer_ReadChar(lpBuf);
+    tmp[3] = ringBuffer_ReadChar(lpBuf);
+
+    return ((uint16_t)(tmp[0]))
+           | (((uint16_t)(tmp[1])) << 8)
+           | (((uint16_t)(tmp[1])) << 16)
+           | (((uint16_t)(tmp[1])) << 24);
+}
+
+
 static void ringBuffer_WriteChar(
     struct ringBuffer* lpBuf,
     unsigned char bData
@@ -489,9 +543,40 @@ static void ringBuffer_WriteChar(
     lpBuf->buffer[lpBuf->dwHead] = bData;
     lpBuf->dwHead = (lpBuf->dwHead + 1) % SERIAL_RINGBUFFER_SIZE;
 }
+static void ringBuffer_WriteChars(
+    struct ringBuffer* lpBuf,
+    unsigned char* bData,
+    unsigned long int dwLen
+) {
+    unsigned long int i;
+
+    for(i = 0; i < dwLen; i=i+1) {
+        ringBuffer_WriteChar(lpBuf, bData[i]);
+    }
+}
+static void ringBuffer_WriteINT16(
+    struct ringBuffer* lpBuf,
+    uint16_t bData
+) {
+    ringBuffer_WriteChar(lpBuf, (unsigned char)(bData & 0xFF));
+    ringBuffer_WriteChar(lpBuf, (unsigned char)((bData >> 8) & 0xFF));
+}
+static void ringBuffer_WriteINT32(
+    struct ringBuffer* lpBuf,
+    uint16_t bData
+) {
+    ringBuffer_WriteChar(lpBuf, (unsigned char)(bData & 0xFF));
+    ringBuffer_WriteChar(lpBuf, (unsigned char)((bData >> 8) & 0xFF));
+    ringBuffer_WriteChar(lpBuf, (unsigned char)((bData >> 16) & 0xFF));
+    ringBuffer_WriteChar(lpBuf, (unsigned char)((bData >> 24) & 0xFF));
+}
+
+
 
 static struct ringBuffer rbRX;
 static struct ringBuffer rbTX;
+
+static unsigned char bOwnAddressRS485;
 
 static inline void serialModeRX() {
     /*
@@ -556,6 +641,11 @@ static void serialInit() {
     ringBuffer_Init(&rbTX);
 
     /*
+        Initialize our own address to the default address
+    */
+    bOwnAddressRS485 = RS485ADR;
+
+    /*
         Initialize UART
     */
     UBRR0   = 34;
@@ -573,8 +663,17 @@ static void serialInit() {
 	#endif
 }
 
+static char serialHandleData__RESPONSE_IDENTIFY[20] = {
+    0x00, /* Address */
+    20, /* Length */
+    0xb7, 0x9a, 0x72, 0xe1, 0x03, 0x6a, 0xeb, 0x11, 0x45, 0x80, 0xb4, 0x99, 0xba, 0xdf, 0x00, 0xa1, /* UUID */
+    0x01, 0x00 /* Version */
+};
+
 static void serialHandleData() {
     unsigned char bLenByte;
+    unsigned char bAdrByte;
+    unsigned char bCommandByte;
 
     /* In case not even a header is present ... ignore */
     if(ringBuffer_AvailableN(&rbRX) < 2) {
@@ -589,15 +688,35 @@ static void serialHandleData() {
     }
 
     /*
-        We have really received a complete message, handle that message ...
+        We have really received a complete message, handle that message _if_
+        the destination address matches ...
     */
 
+    bAdrByte = ringBuffer_ReadChar(&rbTX);
+    if(bAdrByte == bOwnAddressRS485) {
+        ringBuffer_ReadChar(&rbTX);
+        bCommandByte = ringBuffer_ReadChar(&rbTX);
 
+        switch(bCommandByte) {
+            case 0x00:
+                /*
+                    This is a self contained command (already fully read) that basically
+                    only requests an identification string
+                */
+                rbRX.dwHead = (rbRX.dwHead + (bLenByte-3)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
 
-
-
-    /*
-        Discard message ...
-    */
-    rbRX.dwHead = (rbRX.dwHead + bLenByte) % SERIAL_RINGBUFFER_SIZE;
+                ringBuffer_WriteChars(&rbTX, serialHandleData__RESPONSE_IDENTIFY, sizeof(serialHandleData__RESPONSE_IDENTIFY));
+                serialModeTX();
+                break;
+            default:
+                /* Unknown command */
+                rbRX.dwHead = (rbRX.dwHead + (bLenByte-3)) % SERIAL_RINGBUFFER_SIZE;
+                break;
+        }
+    } else {
+        /*
+            Discard message ...
+        */
+        rbRX.dwHead = (rbRX.dwHead + (bLenByte-1)) % SERIAL_RINGBUFFER_SIZE;
+    }
 }
