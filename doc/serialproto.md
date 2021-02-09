@@ -38,7 +38,7 @@ Request:
 | Offset | Length | Content                                         |
 | ------ | ------ | ----------------------------------------------- |
 | 0      | 1      | Address byte                                    |
-| 1      | 1      | Length (1)                                      |
+| 1      | 1      | Length (3)                                      |
 | 2      | 1      | Command ```0x00```                              |
 
 Response:
@@ -46,7 +46,7 @@ Response:
 | Offset | Length | Content                                                                                                       |
 | ------ | ------ | ------------------------------------------------------------------------------------------------------------- |
 | 0      | 1      | Address 0 (response)                                                                                          |
-| 1      | 1      | Length (18)                                                                                                   |
+| 1      | 1      | Length (20)                                                                                                   |
 | 2      | 16     | UUID identifying the device: ```{ 0xe1729ab7, 0x6a03, 0x11eb, 0x8045, 0xb4, 0x99, 0xba, 0xdf, 0x00, 0xa1 }``` |
 | 18     | 2      | Version number (```0x00000001```)                                                                             |
 
@@ -57,7 +57,7 @@ Request:
 | Offset | Length | Content                                         |
 | ------ | ------ | ----------------------------------------------- |
 | 0      | 1      | Address byte                                    |
-| 1      | 1      | Length (1)                                      |
+| 1      | 1      | Length (3)                                      |
 | 2      | 1      | Command ```0x01```                              |
 
 Response:
@@ -65,7 +65,7 @@ Response:
 | Offset | Length | Content                                         |
 | ------ | ------ | ----------------------------------------------- |
 | 0      | 1      | Address 0 (response)                            |
-| 1      | 1      | Length (16)                                     |
+| 1      | 1      | Length (18)                                     |
 | 2      | 4      | Max position in positive x direction (unsigned) |
 | 6      | 4      | Max position in negative x direction (unsigned) |
 | 10     | 4      | Max position in positive y direction (unsigned) |
@@ -78,7 +78,7 @@ Request:
 | Offset | Length | Content                                         |
 | ------ | ------ | ----------------------------------------------- |
 | 0      | 1      | Address byte                                    |
-| 1      | 1      | Length (17)                                     |
+| 1      | 1      | Length (19)                                     |
 | 2      | 1      | Command ```0x02```                              |
 | 3      | 4      | Max position in positive x direction (unsigned) |
 | 7      | 4      | Max position in negative x direction (unsigned) |
@@ -96,7 +96,7 @@ Request:
 | Offset | Length | Content                                         |
 | ------ | ------ | ----------------------------------------------- |
 | 0      | 1      | Address byte                                    |
-| 1      | 1      | Length (1)                                      |
+| 1      | 1      | Length (3)                                      |
 | 2      | 1      | Command ```0x03```                              |
 
 Response:
@@ -104,7 +104,7 @@ Response:
 | Offset | Length | Content                                         |
 | ------ | ------ | ----------------------------------------------- |
 | 0      | 1      | Address 0 (response)                            |
-| 1      | 1      | Length (8)                                      |
+| 1      | 1      | Length (10)                                     |
 | 2      | 4      | Current position X (signed int)                 |
 | 6      | 4      | Current position Y (signed int)                 |
 
@@ -115,7 +115,7 @@ Request:
 | Offset | Length | Content                                         |
 | ------ | ------ | ----------------------------------------------- |
 | 0      | 1      | Address byte                                    |
-| 1      | 1      | Length (9)                                      |
+| 1      | 1      | Length (11)                                     |
 | 2      | 1      | Command ```0x04```                              |
 | 3      | 4      | Target position X (signed int)                  |
 | 7      | 4      | Target position Y (signed int)                  |
@@ -131,7 +131,7 @@ Request:
 | Offset | Length | Content                                         |
 | ------ | ------ | ----------------------------------------------- |
 | 0      | 1      | Address byte                                    |
-| 1      | 1      | Length (1)                                      |
+| 1      | 1      | Length (3)                                      |
 | 2      | 1      | Command ```0x05```                              |
 
 Response:
@@ -139,7 +139,7 @@ Response:
 | Offset | Length | Content                                         |
 | ------ | ------ | ----------------------------------------------- |
 | 0      | 1      | Address byte (0, response)                      |
-| 1      | 1      | Length (8)                                      |
+| 1      | 1      | Length (10)                                     |
 | 3      | 4      | Delay count X (unsigned int)                    |
 | 7      | 4      | Delay count Y (unsigned int)                    |
 
@@ -150,7 +150,7 @@ Request:
 | Offset | Length | Content                                         |
 | ------ | ------ | ----------------------------------------------- |
 | 0      | 1      | Address byte                                    |
-| 1      | 1      | Length (9)                                      |
+| 1      | 1      | Length (11)                                     |
 | 2      | 1      | Command ```0x06```                              |
 | 3      | 4      | Delay count X (unsigned int)                    |
 | 7      | 4      | Delay count Y (unsigned int)                    |
@@ -166,7 +166,7 @@ Request:
 | Offset | Length | Content                                         |
 | ------ | ------ | ----------------------------------------------- |
 | 0      | 1      | Address byte                                    |
-| 1      | 1      | Length (1)                                      |
+| 1      | 1      | Length (3)                                      |
 | 2      | 1      | Command ```0x06```                              |
 
 Response:
@@ -174,7 +174,7 @@ Response:
 | Offset | Length | Content                                         |
 | ------ | ------ | ----------------------------------------------- |
 | 0      | 1      | Address byte (0, response)                      |
-| 1      | 1      | Length (1)                                      |
+| 1      | 1      | Length (3)                                      |
 | 2      | 1      | Status flags                                    |
 
 The status flags consist of the following bits:
