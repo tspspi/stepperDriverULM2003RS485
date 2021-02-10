@@ -2,18 +2,18 @@ CPUFREQ=16000000L
 FLASHDEV=/dev/ttyU0
 RS485ADR=0x02
 
-all: ulm2003rs485.hex
+all: bin/ulm2003rs485.hex
 
-ulm2003rs485.bin: src/ulm2003rs485.c
+tmp/ulm2003rs485.bin: src/ulm2003rs485.c
 
-	avr-gcc -Wall -Os -mmcu=atmega328p -DF_CPU=$(CPUFREQ) -DRS485_ADDRESS=$(RS485ADR) -o ulm2003rs485.bin src/ulm2003rs485.c
+	avr-gcc -Wall -Os -mmcu=atmega328p -DF_CPU=$(CPUFREQ) -DRS485_ADDRESS=$(RS485ADR) -o tmp/ulm2003rs485.bin src/ulm2003rs485.c
 
-ulm2003rs485.hex: ulm2003rs485.bin
+bin/ulm2003rs485.hex: tmp/ulm2003rs485.bin
 
-	avr-size -t ulm2003rs485.bin
-	avr-objcopy -j .text -j .data -O ihex ulm2003rs485.bin ulm2003rs485.hex
+	avr-size -t tmp/ulm2003rs485.bin
+	avr-objcopy -j .text -j .data -O ihex tmp/ulm2003rs485.bin bin/ulm2003rs485.hex
 
-flash: ulm2003rs485.hex
+flash: bin/ulm2003rs485.hex
 
 	sudo chmod 666 $(FLASHDEV)
 	avrdude -v -p atmega328p -c arduino -P $(FLASHDEV) -b 57600 -D -U flash:w:ulm2003rs485.hex:i
@@ -25,10 +25,10 @@ framac: src/ulm2003rs485.c
 
 clean:
 
-	-rm *.bin
+	-rm tmp/*.bin
 
 cleanall: clean
 
-	-rm *.hex
+	-rm bin/*.hex
 
 .PHONY: all clean cleanall
