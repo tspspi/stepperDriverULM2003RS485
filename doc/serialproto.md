@@ -28,6 +28,7 @@ All commands and responses are sent via RS485. The device is usually in listenin
 | 0x05 | Get speed      |                | Returns a "speed" setting - this sets the delay between steps in timer ticks                    |
 | 0x06 | Set speed      | 2 delay values | Sets a "speed" setting - this sets the delay between steps in timer ticks                       |
 | 0x07 | Get status     |                | Returns status flags. Currently only defined if the motor is moving or not                      |
+| 0x08 | Set cur. pos.  | 2 positions    | Sets the current position (used to zero, restore state after reset, etc.)                       |
 
 ## Commands in detail
 
@@ -189,3 +190,19 @@ The status flags consist of the following bits:
 | 5    |                                                            |
 | 6    |                                                            |
 | 7    |                                                            |
+
+### Set current position
+
+Request:
+
+| Offset | Length | Content                                         |
+| ------ | ------ | ----------------------------------------------- |
+| 0      | 1      | Address byte                                    |
+| 1      | 1      | Length (11)                                     |
+| 2      | 1      | Command ```0x08```                              |
+| 3      | 4      | Current position X (signed int)                 |
+| 7      | 4      | Current position Y (signed int)                 |
+
+Response:
+
+None
