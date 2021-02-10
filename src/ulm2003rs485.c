@@ -191,9 +191,9 @@ static void setStepState(
     Stepper current state
 */
 
-#define DEFAULT_BOUNDS_X_MIN        1073741824
+#define DEFAULT_BOUNDS_X_MIN        -1073741824
 #define DEFAULT_BOUNDS_X_MAX        1073741824
-#define DEFAULT_BOUNDS_Y_MIN        1073741824
+#define DEFAULT_BOUNDS_Y_MIN        -1073741824
 #define DEFAULT_BOUNDS_Y_MAX        1073741824
 
 #define DEFAULT_VELOCITY_X          80
@@ -203,8 +203,8 @@ static unsigned char currentState[2];
 static   signed long int currentPosition[2];
 static   signed long int targetPosition[2];
 
-static unsigned long int currentMin[2];
-static unsigned long int currentMax[2];
+static   signed long int currentMin[2];
+static   signed long int currentMax[2];
 static unsigned long int currentVelocity[2];
 
 static unsigned long int currentVelocityCounter[2];
@@ -526,9 +526,9 @@ static uint32_t ringBuffer_ReadINT32(
     tmp[3] = ringBuffer_ReadChar(lpBuf);
 
     return ((uint16_t)(tmp[0]))
-           | (((uint16_t)(tmp[1])) << 8)
-           | (((uint16_t)(tmp[2])) << 16)
-           | (((uint16_t)(tmp[3])) << 24);
+           | (((uint32_t)(tmp[1])) << 8)
+           | (((uint32_t)(tmp[2])) << 16)
+           | (((uint32_t)(tmp[3])) << 24);
 }
 static signed long int ringBuffer_ReadSignedINT32(
     struct ringBuffer* lpBuf
@@ -542,10 +542,10 @@ static signed long int ringBuffer_ReadSignedINT32(
     tmp[2] = ringBuffer_ReadChar(lpBuf);
     tmp[3] = ringBuffer_ReadChar(lpBuf);
 
-    uint32_t dwUnsigned = (((uint16_t)(tmp[0]))
-           | (((uint16_t)(tmp[1])) << 8)
-           | (((uint16_t)(tmp[2])) << 16)
-           | (((uint16_t)(tmp[3])) << 24)) & 0x7FFFFFFF;
+    uint32_t dwUnsigned = (((uint32_t)(tmp[0]))
+           | (((uint32_t)(tmp[1])) << 8)
+           | (((uint32_t)(tmp[2])) << 16)
+           | (((uint32_t)(tmp[3])) << 24)) & 0x7FFFFFFF;
 
     signed long int res = ((tmp[3] & 0x80) == 0) ? dwUnsigned : -1 * dwUnsigned;
 
@@ -753,32 +753,20 @@ static void serialHandleData() {
                     uppermost position ...
                 */
                 {
-                    uint32_t newPos[2];
+                    signed long int newPos[2];
 
-                    newPos[0] = ringBuffer_ReadINT32(&rbRX);
-                    newPos[1] = ringBuffer_ReadINT32(&rbRX);
+                    newPos[0] = ringBuffer_ReadSignedINT32(&rbRX);
+                    newPos[1] = ringBuffer_ReadSignedINT32(&rbRX);
 
-                    if((newPos[0] & 0x80000000) == 0) {
-                        if((newPos[0] & 0x7FFFFFFF) < currentMax[0]) {
-                            targetPosition[0] = newPos[0] & 0x7FFFFFFF;
-                        }
-                    } else {
-                        if((newPos[0] & 0x7FFFFFFF) < currentMin[0]) {
-                            targetPosition[0] = -1 * (newPos[0] & 0x7FFFFFFF);
-                        }
+                    if((newPos[0] > currentMin[0]) && (newPos[0] < currentMax[0])) {
+                        targetPosition[0] = newPos[0];
                     }
 
-                    if((newPos[1] & 0x80000000) == 0) {
-                        if((newPos[1] & 0x7FFFFFFF) < currentMax[1]) {
-                            targetPosition[1] = newPos[1] & 0x7FFFFFFF;
-                        }
-                    } else {
-                        if((newPos[1] & 0x7FFFFFFF) < currentMin[1]) {
-                            targetPosition[1] = -1 * (newPos[1] & 0x7FFFFFFF);
-                        }
+                    if((newPos[1] > currentMin[1]) && (newPos[1] < currentMax[1])) {
+                        targetPosition[1] = newPos[1];
                     }
                 }
-                rbRX.dwTail = (rbRX.dwTail + (bLenByte-3-8)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
+                rbRX.dwTail = (rbRX.dwTail + (bLenByte-11)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
                 break;
             case 0x02: /* Set boundaries */
                 {
