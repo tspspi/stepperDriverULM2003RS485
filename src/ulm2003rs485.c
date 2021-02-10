@@ -11,6 +11,16 @@
     #define RS485ADR 0x02
 #endif
 
+#define CMD_CODE_IDENTIFY               0x00
+#define CMD_CODE_GETBOUNDARIES          0x01
+#define CMD_CODE_SETBOUNDARIES          0x02
+#define CMD_CODE_GETPOSITION            0x03
+#define CMD_CODE_SETTARGETPOSITION      0x04
+#define CMD_CODE_GETSPEED               0x05
+#define CMD_CODE_SETSPEED               0x06
+#define CMD_CODE_GETSTATUS              0x07
+#define CMD_CODE_SETCURRENTPOSITION     0x08
+
 #ifndef __cplusplus
     typedef unsigned char bool;
     #define true 1
@@ -593,6 +603,27 @@ static void ringBuffer_WriteINT32(
     ringBuffer_WriteChar(lpBuf, (unsigned char)((bData >> 24) & 0xFF));
 }
 
+static void ringBuffer_WriteSINT32(
+    struct ringBuffer* lpBuf,
+    signed long int data
+) {
+    uint32_t uData;
+
+    if(data < 0) {
+        uData = -1 * data;
+        uData = uData | 0x80000000;
+    } else {
+        uData = data;
+        uData = uData & 0x7FFFFFFF;
+    }
+
+    ringBuffer_WriteChar(lpBuf, (unsigned char)(uData & 0xFF));
+    ringBuffer_WriteChar(lpBuf, (unsigned char)((uData >> 8) & 0xFF));
+    ringBuffer_WriteChar(lpBuf, (unsigned char)((uData >> 16) & 0xFF));
+    ringBuffer_WriteChar(lpBuf, (unsigned char)((uData >> 24) & 0xFF));
+}
+
+
 
 
 static volatile struct ringBuffer rbRX;
@@ -736,7 +767,7 @@ static void serialHandleData() {
         ringBuffer_ReadChar(&rbRX); /* skip Length byte since we already know that value */
         bCommandByte = ringBuffer_ReadChar(&rbRX);
         switch(bCommandByte) {
-            case 0x00: /* Identify */
+            case CMD_CODE_IDENTIFY: /* Identify */
                 /*
                     This is a self contained command (already fully read) that basically
                     only requests an identification string
@@ -745,7 +776,7 @@ static void serialHandleData() {
                 ringBuffer_WriteChars(&rbTX, serialHandleData__RESPONSE_IDENTIFY, sizeof(serialHandleData__RESPONSE_IDENTIFY));
                 serialModeTX();
                 break;
-            case 0x07: /* Get status */
+            case CMD_CODE_GETSTATUS: /* Get status */
                 {
                     uint8_t response[3];
 
@@ -760,7 +791,27 @@ static void serialHandleData() {
                 rbRX.dwTail = (rbRX.dwTail + (bLenByte-3)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
                 break;
 
-            case 0x04: /* Set position */
+            case CMD_CODE_GETBOUNDARIES: /* Get status */
+                {
+                    uint8_t response[2];
+
+                    response[0] = 0x00; /* Responses are sent to address 0 */
+                    response[1] = 0x12; /* Request is 18 bytes long */
+
+                    ringBuffer_WriteChars(&rbTX, response, sizeof(response));
+
+                    ringBuffer_WriteSINT32(&rbTX, currentMax[0]);
+                    ringBuffer_WriteSINT32(&rbTX, currentMin[0]);
+                    ringBuffer_WriteSINT32(&rbTX, currentMax[1]);
+                    ringBuffer_WriteSINT32(&rbTX, currentMin[1]);
+
+                    serialModeTX();
+                }
+                rbRX.dwTail = (rbRX.dwTail + (bLenByte-3)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
+                break;
+
+
+            case CMD_CODE_SETTARGETPOSITION: /* Set position */
                 /*
                     Set position requires 11 bytes, now only two signed integers are added; Note
                     that they are usually transmitted unsigned with a direction flag in the
@@ -782,7 +833,43 @@ static void serialHandleData() {
                 }
                 rbRX.dwTail = (rbRX.dwTail + (bLenByte-11)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
                 break;
-            case 0x02: /* Set boundaries */
+
+            case CMD_CODE_GETPOSITION: /* Get status */
+                {
+                    uint8_t response[2];
+
+                    response[0] = 0x00; /* Responses are sent to address 0 */
+                    response[1] = 0x0A; /* Request is 10 bytes long */
+
+                    ringBuffer_WriteChars(&rbTX, response, sizeof(response));
+
+                    ringBuffer_WriteSINT32(&rbTX, currentPosition[0]);
+                    ringBuffer_WriteSINT32(&rbTX, currentPosition[1]);
+
+                    serialModeTX();
+                }
+                rbRX.dwTail = (rbRX.dwTail + (bLenByte-3)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
+                break;
+
+            case CMD_CODE_GETSPEED:
+                {
+                    uint8_t response[2];
+
+                    response[0] = 0x00; /* Responses are sent to address 0 */
+                    response[1] = 0x0A; /* Request is 10 bytes long */
+
+                    ringBuffer_WriteChars(&rbTX, response, sizeof(response));
+
+                    ringBuffer_WriteINT32(&rbTX, currentVelocity[0]);
+                    ringBuffer_WriteINT32(&rbTX, currentVelocity[1]);
+
+                    serialModeTX();
+                }
+                rbRX.dwTail = (rbRX.dwTail + (bLenByte-3)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
+                break;
+
+
+            case CMD_CODE_SETBOUNDARIES: /* Set boundaries */
                 {
                     currentMax[0] = ringBuffer_ReadSignedINT32(&rbRX);
                     currentMin[0] = ringBuffer_ReadSignedINT32(&rbRX);
@@ -791,7 +878,7 @@ static void serialHandleData() {
                 }
                 rbRX.dwTail = (rbRX.dwTail + (bLenByte-19)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
                 break;
-            case 0x06: /* Set speed */
+            case CMD_CODE_SETSPEED: /* Set speed */
                 {
                     currentVelocity[0] = ringBuffer_ReadINT32(&rbRX);
                     currentVelocity[1] = ringBuffer_ReadINT32(&rbRX);
@@ -801,7 +888,7 @@ static void serialHandleData() {
                 }
                 rbRX.dwTail = (rbRX.dwTail + (bLenByte-3-8)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
                 break;
-            case 0x08: /* Set current position */
+            case CMD_CODE_SETCURRENTPOSITION: /* Set current position */
                 {
                     signed long int newPos[2];
 
