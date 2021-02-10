@@ -13,11 +13,11 @@ Currently supported / tested commands:
 | Command        | Status      |
 | -------------  | ----------- |
 | Identify       | ok          |
-| Get boundaries |             |
+| Get boundaries | implemented |
 | Set boundaries | implemented |
-| Get position   |             |
+| Get position   | implemented |
 | Set position   | ok          |
-| Get speed      |             |
+| Get speed      | implemented |
 | Set speed      | ok          |
 | Get status     | ok          |
 | Set cur. pos.  | implemented |
