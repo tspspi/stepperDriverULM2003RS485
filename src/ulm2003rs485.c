@@ -409,7 +409,7 @@ static void handleStepperEvents() {
     */
     for(iStepper = 0; iStepper < 2; iStepper = iStepper + 1){
         currentVelocityCounter[iStepper] = currentVelocityCounter[iStepper] + 1;
-        if(currentVelocityCounter[iStepper] == currentVelocity[iStepper]) {
+        if(currentVelocityCounter[iStepper] >= currentVelocity[iStepper]) {
             currentVelocityCounter[iStepper] = 0;
 
             if(currentPosition[iStepper] > targetPosition[iStepper]) {
@@ -770,24 +770,15 @@ static void serialHandleData() {
                 break;
             case 0x02: /* Set boundaries */
                 {
-                    uint32_t newBounds[4];
-
-                    newBounds[0] = ringBuffer_ReadINT32(&rbRX);
-                    newBounds[1] = ringBuffer_ReadINT32(&rbRX);
-                    newBounds[2] = ringBuffer_ReadINT32(&rbRX);
-                    newBounds[3] = ringBuffer_ReadINT32(&rbRX);
-
-                    currentMax[0] = serialHandleData__DECODE_UINT32_TO_SINT(newBounds[0]);
-                    currentMin[0] = serialHandleData__DECODE_UINT32_TO_SINT(newBounds[1]);
-                    currentMax[1] = serialHandleData__DECODE_UINT32_TO_SINT(newBounds[2]);
-                    currentMin[1] = serialHandleData__DECODE_UINT32_TO_SINT(newBounds[3]);
+                    currentMax[0] = ringBuffer_ReadSignedINT32(&rbRX);
+                    currentMin[0] = ringBuffer_ReadSignedINT32(&rbRX);
+                    currentMax[1] = ringBuffer_ReadSignedINT32(&rbRX);
+                    currentMin[1] = ringBuffer_ReadSignedINT32(&rbRX);
                 }
-                rbRX.dwTail = (rbRX.dwTail + (bLenByte-3-16)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
+                rbRX.dwTail = (rbRX.dwTail + (bLenByte-19)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
                 break;
             case 0x06: /* Set speed */
                 {
-                    uint32_t newSpeedDelay[2];
-
                     currentVelocity[0] = ringBuffer_ReadINT32(&rbRX);
                     currentVelocity[1] = ringBuffer_ReadINT32(&rbRX);
                 }
