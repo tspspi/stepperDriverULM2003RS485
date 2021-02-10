@@ -781,6 +781,9 @@ static void serialHandleData() {
                 {
                     currentVelocity[0] = ringBuffer_ReadINT32(&rbRX);
                     currentVelocity[1] = ringBuffer_ReadINT32(&rbRX);
+
+                    if(currentVelocity[0] < 30) { currentVelocity[0] = 30; }
+                    if(currentVelocity[1] < 30) { currentVelocity[1] = 30; }
                 }
                 rbRX.dwTail = (rbRX.dwTail + (bLenByte-3-8)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
                 break;
