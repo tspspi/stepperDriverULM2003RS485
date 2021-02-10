@@ -709,15 +709,21 @@ static void serialHandleData() {
     unsigned char bAdrByte;
     unsigned char bCommandByte;
 
+    unsigned char bAvailable;
+
     /* In case not even a header is present ... ignore */
-    if(ringBuffer_AvailableN(&rbRX) < 2) {
+    bAvailable = ringBuffer_AvailableN(&rbRX);
+    if(bAvailable < 2) {
         return;
     }
 
-    /* In case there is a header check if there is enough data ... */
+    /*
+        In case there is a header check if there is enough data ...
+        In case there is not simply check later (some kind of busy
+        waiting loop)
+    */
     bLenByte = rbRX.buffer[(rbRX.dwTail + 1) % SERIAL_RINGBUFFER_SIZE];
-
-    if(ringBuffer_AvailableN(&rbRX) < bLenByte) {
+    if(bAvailable < bLenByte) {
         return;
     }
 
@@ -725,10 +731,9 @@ static void serialHandleData() {
         We have really received a complete message, handle that message _if_
         the destination address matches ...
     */
-
     bAdrByte = ringBuffer_ReadChar(&rbRX);
     if(bAdrByte == bOwnAddressRS485) {
-        ringBuffer_ReadChar(&rbRX);
+        ringBuffer_ReadChar(&rbRX); /* skip Length byte since we already know that value */
         bCommandByte = ringBuffer_ReadChar(&rbRX);
         switch(bCommandByte) {
             case 0x00: /* Identify */
