@@ -458,28 +458,28 @@ struct ringBuffer {
     volatile unsigned char buffer[SERIAL_RINGBUFFER_SIZE];
 };
 
-static inline void ringBuffer_Init(struct ringBuffer* lpBuf) {
+static inline void ringBuffer_Init(volatile struct ringBuffer* lpBuf) {
     lpBuf->dwHead = 0;
     lpBuf->dwTail = 0;
 }
-static inline bool ringBuffer_Available(struct ringBuffer* lpBuf) {
+static inline bool ringBuffer_Available(volatile struct ringBuffer* lpBuf) {
     return (lpBuf->dwHead != lpBuf->dwTail) ? true : false;
 }
-static inline bool ringBuffer_Writable(struct ringBuffer* lpBuf) {
+static inline bool ringBuffer_Writable(volatile struct ringBuffer* lpBuf) {
     return (((lpBuf->dwHead + 1) % SERIAL_RINGBUFFER_SIZE) != lpBuf->dwTail) ? true : false;
 }
-static inline unsigned long int ringBuffer_AvailableN(struct ringBuffer* lpBuf) {
+static inline unsigned long int ringBuffer_AvailableN(volatile struct ringBuffer* lpBuf) {
     if(lpBuf->dwHead >= lpBuf->dwTail) {
         return lpBuf->dwHead - lpBuf->dwTail;
     } else {
         return (SERIAL_RINGBUFFER_SIZE - lpBuf->dwTail) + lpBuf->dwHead;
     }
 }
-static inline unsigned long int ringBuffer_WriteableN(struct ringBuffer* lpBuf) {
+static inline unsigned long int ringBuffer_WriteableN(volatile struct ringBuffer* lpBuf) {
     return SERIAL_RINGBUFFER_SIZE - ringBuffer_AvailableN(lpBuf);
 }
 
-static unsigned char ringBuffer_ReadChar(struct ringBuffer* lpBuf) {
+static unsigned char ringBuffer_ReadChar(volatile struct ringBuffer* lpBuf) {
     char t;
 
     if(lpBuf->dwHead == lpBuf->dwTail) {
@@ -491,40 +491,44 @@ static unsigned char ringBuffer_ReadChar(struct ringBuffer* lpBuf) {
 
     return t;
 }
-static unsigned long int ringBuffer_ReadChars(
-    struct ringBuffer* lpBuf,
-    unsigned char* lpOut,
-    unsigned long int dwLen
-) {
-    char t;
-    unsigned long int i;
+#if 0
+    static unsigned long int ringBuffer_ReadChars(
+        volatile struct ringBuffer* lpBuf,
+        unsigned char* lpOut,
+        unsigned long int dwLen
+    ) {
+        char t;
+        unsigned long int i;
 
-    for(i = 0; i < dwLen; i=i+1) {
-        if(lpBuf->dwHead == lpBuf->dwTail) {
-            return 0x00;
+        for(i = 0; i < dwLen; i=i+1) {
+            if(lpBuf->dwHead == lpBuf->dwTail) {
+                return 0x00;
+            }
+
+            t = lpBuf->buffer[lpBuf->dwTail];
+            lpBuf->dwTail = (lpBuf->dwTail + 1) % SERIAL_RINGBUFFER_SIZE;
+            lpOut[i] = t;
         }
 
-        t = lpBuf->buffer[lpBuf->dwTail];
-        lpBuf->dwTail = (lpBuf->dwTail + 1) % SERIAL_RINGBUFFER_SIZE;
-        lpOut[i] = t;
+        return i;
     }
+#endif
+#if 0
+    static uint16_t ringBuffer_ReadINT16(
+        volatile struct ringBuffer* lpBuf
+    ) {
+        unsigned char tmp[2];
 
-    return i;
-}
-static uint16_t ringBuffer_ReadINT16(
-    struct ringBuffer* lpBuf
-) {
-    unsigned char tmp[2];
+        if(ringBuffer_AvailableN(lpBuf) < 2) { return 0; }
 
-    if(ringBuffer_AvailableN(lpBuf) < 2) { return 0; }
+        tmp[0] = ringBuffer_ReadChar(lpBuf);
+        tmp[1] = ringBuffer_ReadChar(lpBuf);
 
-    tmp[0] = ringBuffer_ReadChar(lpBuf);
-    tmp[1] = ringBuffer_ReadChar(lpBuf);
-
-    return ((uint16_t)(tmp[0])) | (((uint16_t)(tmp[1])) << 8);
-}
+        return ((uint16_t)(tmp[0])) | (((uint16_t)(tmp[1])) << 8);
+    }
+#endif
 static uint32_t ringBuffer_ReadINT32(
-    struct ringBuffer* lpBuf
+    volatile struct ringBuffer* lpBuf
 ) {
     unsigned char tmp[4];
 
@@ -565,7 +569,7 @@ static signed long int ringBuffer_ReadSignedINT32(
 
 
 static void ringBuffer_WriteChar(
-    struct ringBuffer* lpBuf,
+    volatile struct ringBuffer* lpBuf,
     unsigned char bData
 ) {
     if(((lpBuf->dwHead + 1) % SERIAL_RINGBUFFER_SIZE) == lpBuf->dwTail) {
@@ -576,7 +580,7 @@ static void ringBuffer_WriteChar(
     lpBuf->dwHead = (lpBuf->dwHead + 1) % SERIAL_RINGBUFFER_SIZE;
 }
 static void ringBuffer_WriteChars(
-    struct ringBuffer* lpBuf,
+    volatile struct ringBuffer* lpBuf,
     unsigned char* bData,
     unsigned long int dwLen
 ) {
@@ -586,16 +590,18 @@ static void ringBuffer_WriteChars(
         ringBuffer_WriteChar(lpBuf, bData[i]);
     }
 }
-static void ringBuffer_WriteINT16(
-    struct ringBuffer* lpBuf,
-    uint16_t bData
-) {
-    ringBuffer_WriteChar(lpBuf, (unsigned char)(bData & 0xFF));
-    ringBuffer_WriteChar(lpBuf, (unsigned char)((bData >> 8) & 0xFF));
-}
+#if 0
+    static void ringBuffer_WriteINT16(
+        volatile struct ringBuffer* lpBuf,
+        uint16_t bData
+    ) {
+        ringBuffer_WriteChar(lpBuf, (unsigned char)(bData & 0xFF));
+        ringBuffer_WriteChar(lpBuf, (unsigned char)((bData >> 8) & 0xFF));
+    }
+#endif
 static void ringBuffer_WriteINT32(
-    struct ringBuffer* lpBuf,
-    uint16_t bData
+    volatile struct ringBuffer* lpBuf,
+    uint32_t bData
 ) {
     ringBuffer_WriteChar(lpBuf, (unsigned char)(bData & 0xFF));
     ringBuffer_WriteChar(lpBuf, (unsigned char)((bData >> 8) & 0xFF));
@@ -604,7 +610,7 @@ static void ringBuffer_WriteINT32(
 }
 
 static void ringBuffer_WriteSINT32(
-    struct ringBuffer* lpBuf,
+    volatile struct ringBuffer* lpBuf,
     signed long int data
 ) {
     uint32_t uData;
@@ -718,22 +724,12 @@ static void serialInit() {
 	#endif
 }
 
-static char serialHandleData__RESPONSE_IDENTIFY[20] = {
+static unsigned char serialHandleData__RESPONSE_IDENTIFY[20] = {
     0x00, /* Address */
     20, /* Length */
     0xb7, 0x9a, 0x72, 0xe1, 0x03, 0x6a, 0xeb, 0x11, 0x45, 0x80, 0xb4, 0x99, 0xba, 0xdf, 0x00, 0xa1, /* UUID */
     0x01, 0x00 /* Version */
 };
-
-static signed long int serialHandleData__DECODE_UINT32_TO_SINT(
-    uint32_t dwData
-) {
-    if((dwData & 0x80000000) == 0) {
-        return (signed long int)(dwData & 0x7FFFFFFF);
-    } else {
-        return ((signed long int)(dwData & 0x7FFFFFFF)) * (-1);
-    }
-}
 
 static void serialHandleData() {
     unsigned char bLenByte;
