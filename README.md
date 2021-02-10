@@ -19,7 +19,7 @@ Currently supported / tested commands:
 | Set position   | ok          |
 | Get speed      |             |
 | Set speed      | ok          |
-| Get status     |             |
+| Get status     | ok          |
 | Set cur. pos.  | implemented |
 
 

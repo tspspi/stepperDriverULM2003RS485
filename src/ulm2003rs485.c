@@ -531,7 +531,7 @@ static uint32_t ringBuffer_ReadINT32(
            | (((uint32_t)(tmp[3])) << 24);
 }
 static signed long int ringBuffer_ReadSignedINT32(
-    struct ringBuffer* lpBuf
+    volatile struct ringBuffer* lpBuf
 ) {
     unsigned char tmp[4];
 
@@ -744,6 +744,20 @@ static void serialHandleData() {
                 rbRX.dwTail = (rbRX.dwTail + (bLenByte-3)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
                 ringBuffer_WriteChars(&rbTX, serialHandleData__RESPONSE_IDENTIFY, sizeof(serialHandleData__RESPONSE_IDENTIFY));
                 serialModeTX();
+                break;
+            case 0x07: /* Get status */
+                {
+                    uint8_t response[3];
+
+                    response[0] = 0x00; /* Responses are sent to address 0 */
+                    response[1] = 0x03; /* Request has 3 bytes length */
+                    response[2] = ((currentPosition[0] == targetPosition[0]) ? 0x00 : 0x01)
+                                | ((currentPosition[1] == targetPosition[1]) ? 0x00 : 0x02);
+
+                    ringBuffer_WriteChars(&rbTX, response, sizeof(response));
+                    serialModeTX();
+                }
+                rbRX.dwTail = (rbRX.dwTail + (bLenByte-3)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
                 break;
 
             case 0x04: /* Set position */
