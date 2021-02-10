@@ -506,7 +506,7 @@ static uint16_t ringBuffer_ReadINT16(
 ) {
     unsigned char tmp[2];
 
-    if(ringBuffer_Available(lpBuf) < 2) { return 0; }
+    if(ringBuffer_AvailableN(lpBuf) < 2) { return 0; }
 
     tmp[0] = ringBuffer_ReadChar(lpBuf);
     tmp[1] = ringBuffer_ReadChar(lpBuf);
@@ -518,7 +518,7 @@ static uint32_t ringBuffer_ReadINT32(
 ) {
     unsigned char tmp[4];
 
-    if(ringBuffer_Available(lpBuf) < 4) { return 0; }
+    if(ringBuffer_AvailableN(lpBuf) < 4) { return 0; }
 
     tmp[0] = ringBuffer_ReadChar(lpBuf);
     tmp[1] = ringBuffer_ReadChar(lpBuf);
@@ -527,9 +527,31 @@ static uint32_t ringBuffer_ReadINT32(
 
     return ((uint16_t)(tmp[0]))
            | (((uint16_t)(tmp[1])) << 8)
-           | (((uint16_t)(tmp[1])) << 16)
-           | (((uint16_t)(tmp[1])) << 24);
+           | (((uint16_t)(tmp[2])) << 16)
+           | (((uint16_t)(tmp[3])) << 24);
 }
+static signed long int ringBuffer_ReadSignedINT32(
+    struct ringBuffer* lpBuf
+) {
+    unsigned char tmp[4];
+
+    if(ringBuffer_AvailableN(lpBuf) < 4) { return 0; }
+
+    tmp[0] = ringBuffer_ReadChar(lpBuf);
+    tmp[1] = ringBuffer_ReadChar(lpBuf);
+    tmp[2] = ringBuffer_ReadChar(lpBuf);
+    tmp[3] = ringBuffer_ReadChar(lpBuf);
+
+    uint32_t dwUnsigned = (((uint16_t)(tmp[0]))
+           | (((uint16_t)(tmp[1])) << 8)
+           | (((uint16_t)(tmp[2])) << 16)
+           | (((uint16_t)(tmp[3])) << 24)) & 0x7FFFFFFF;
+
+    signed long int res = ((tmp[3] & 0x80) == 0) ? dwUnsigned : -1 * dwUnsigned;
+
+    return res;
+}
+
 
 
 static void ringBuffer_WriteChar(
