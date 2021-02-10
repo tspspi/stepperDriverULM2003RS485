@@ -787,6 +787,23 @@ static void serialHandleData() {
                 }
                 rbRX.dwTail = (rbRX.dwTail + (bLenByte-3-8)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
                 break;
+            case 0x08: /* Set current position */
+                {
+                    signed long int newPos[2];
+
+                    newPos[0] = ringBuffer_ReadSignedINT32(&rbRX);
+                    newPos[1] = ringBuffer_ReadSignedINT32(&rbRX);
+
+                    if((newPos[0] > currentMin[0]) && (newPos[0] < currentMax[0])) {
+                        currentPosition[0] = newPos[0];
+                    }
+
+                    if((newPos[1] > currentMin[1]) && (newPos[1] < currentMax[1])) {
+                        currentPosition[1] = newPos[1];
+                    }
+                }
+                rbRX.dwTail = (rbRX.dwTail + (bLenByte-11)) % SERIAL_RINGBUFFER_SIZE; /* Compatibility with invalid protocol: Skip any remaining bytes */
+                break;
             default:
                 /* Unknown command */
                 rbRX.dwTail = (rbRX.dwTail + (bLenByte-3)) % SERIAL_RINGBUFFER_SIZE;
