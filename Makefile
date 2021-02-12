@@ -16,7 +16,7 @@ bin/ulm2003rs485.hex: tmp/ulm2003rs485.bin
 flash: bin/ulm2003rs485.hex
 
 	sudo chmod 666 $(FLASHDEV)
-	avrdude -v -p atmega328p -c arduino -P $(FLASHDEV) -b 57600 -D -U flash:w:ulm2003rs485.hex:i
+	avrdude -v -p atmega328p -c arduino -P $(FLASHDEV) -b 57600 -D -U flash:w:bin/ulm2003rs485.hex:i
 
 framac: src/ulm2003rs485.c
 
