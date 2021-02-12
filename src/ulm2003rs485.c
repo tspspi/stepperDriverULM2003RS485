@@ -653,7 +653,7 @@ static inline void serialModeTX() {
         and toggle transmit enable bit in UART
     */
     PORTD = PORTD | 0x08; /* Set RE and DE to high (RE: inactive, DE: active) */
-    UCSR0B = (UCSR0B & (~0x90)) | 0x08 | 0x20; /* Enable UDRE interrupt handler, enable transmitter and disable receive interrupt & receiver */
+    UCSR0B = (UCSR0B & (~0x90)) | 0x08 | 0x20 | 0x40; /* Enable UDRE interrupt handler, enable transmitter and disable receive interrupt & receiver */
     return;
 }
 
@@ -665,6 +665,11 @@ ISR(USART_RX_vect) {
     #ifndef FRAMAC_SKIP
         sei();
     #endif
+}
+
+ISR(USART_TX_vect) {
+    PORTD = PORTD & (~(0x08)); /* Set RE and DE to low (RE: active, DE: inactive) */
+    UCSR0B = (UCSR0B & (~0xE8)) | 0x10 | 0x80; /* Disable all transmit interrupts, enable receiver, enable receive complete interrupt */
 }
 
 ISR(USART_UDRE_vect) {
@@ -679,7 +684,7 @@ ISR(USART_UDRE_vect) {
 
     if(ringBuffer_Available(&rbTX) != true) {
         /* Disable transmit mode again ... */
-        serialModeRX();
+        UCSR0B = UCSR0B & (~0x20);
     } else {
         /* Shift next byte to the outside world ... */
         UDR0 = ringBuffer_ReadChar(&rbTX);
