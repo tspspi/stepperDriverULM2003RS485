@@ -21,6 +21,10 @@
 #define CMD_CODE_GETSTATUS              0x07
 #define CMD_CODE_SETCURRENTPOSITION     0x08
 
+#define RS485_DIRECTION_PORT            PORTD
+#define RS485_DIRECTION_BIT             0x08
+#define RS485_DIRECTION_DDR             DDRD
+
 #ifndef __cplusplus
     typedef unsigned char bool;
     #define true 1
@@ -81,8 +85,8 @@
 
         PD:             0           -                   Serial TXD
                         1           -                   Serial RXD
-                        2           OUT
-                        3           IN      Nopull
+                        2           IN      Nopull
+                        3           OUT
                         4           IN      Nopull
                         5           IN      Nopull
                         6           OUT                 Stepper 1
@@ -234,8 +238,10 @@ int main() {
     */
     DDRB = 0x3F;
     PORTB = 0x00;
-    DDRD = DDRD | 0xC4;
+    DDRD = DDRD | 0xC0;
     PORTD = 0x00;
+    RS485_DIRECTION_DDR = RS485_DIRECTION_DDR | RS485_DIRECTION_BIT;
+    RS485_DIRECTION_PORT = RS485_DIRECTION_PORT & (~RS485_DIRECTION_BIT);
 
     #ifndef FRAMAC_SKIP
 		sei();
@@ -642,7 +648,7 @@ static inline void serialModeRX() {
         Set to receive mode on RS485 driver
         Toggle receive enable bit on UART, disable transmit enable bit
     */
-    PORTD = PORTD & (~(0x08)); /* Set RE and DE to low (RE: active, DE: inactive) */
+    RS485_DIRECTION_PORT = RS485_DIRECTION_PORT & (~RS485_DIRECTION_BIT);
     UCSR0B = (UCSR0B & (~0xE8)) | 0x10 | 0x80; /* Disable all transmit interrupts, enable receiver, enable receive complete interrupt */
     return;
 }
@@ -652,7 +658,9 @@ static inline void serialModeTX() {
         Set to transmit mode on RS485 driver
         and toggle transmit enable bit in UART
     */
-    PORTD = PORTD | 0x08; /* Set RE and DE to high (RE: inactive, DE: active) */
+    /* Set RE and DE to high (RE: inactive, DE: active) */
+    RS485_DIRECTION_PORT = RS485_DIRECTION_PORT | RS485_DIRECTION_BIT;
+    UCSR0A = UCSR0A | 0x40; /* Clear TXCn */
     UCSR0B = (UCSR0B & (~0x90)) | 0x08 | 0x20 | 0x40; /* Enable UDRE interrupt handler, enable transmitter and disable receive interrupt & receiver */
     return;
 }
@@ -668,7 +676,7 @@ ISR(USART_RX_vect) {
 }
 
 ISR(USART_TX_vect) {
-    PORTD = PORTD & (~(0x08)); /* Set RE and DE to low (RE: active, DE: inactive) */
+    RS485_DIRECTION_PORT = RS485_DIRECTION_PORT & (~RS485_DIRECTION_BIT);
     UCSR0B = (UCSR0B & (~0xE8)) | 0x10 | 0x80; /* Disable all transmit interrupts, enable receiver, enable receive complete interrupt */
 }
 
@@ -682,7 +690,7 @@ ISR(USART_UDRE_vect) {
         cli();
     #endif
 
-    if(ringBuffer_Available(&rbTX) != true) {
+    if(ringBuffer_AvailableN(&rbTX) == 0) {
         /* Disable transmit mode again ... */
         UCSR0B = UCSR0B & (~0x20);
     } else {
